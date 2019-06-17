@@ -10,6 +10,24 @@
 #include "json.hpp"
 #include "PiritLib.h"
 #include "helpers.hpp"
+#include <regex>
+
+template <typename F>
+struct privDefer {
+	F f;
+	privDefer(F f) : f(f) {}
+	~privDefer() { f(); }
+};
+
+template <typename F>
+privDefer<F> defer_func(F f) {
+	return privDefer<F>(f);
+}
+
+#define DEFER_1(x, y) x##y
+#define DEFER_2(x, y) DEFER_1(x, y)
+#define DEFER_3(x)    DEFER_2(x, __COUNTER__)
+#define defer(code)   auto DEFER_3(_defer_) = defer_func([&](){code;})
 
 using namespace std;
 using namespace Arcus;
@@ -18,6 +36,7 @@ using namespace Helpers;
 webSocket server;
 ArcusHandlers* arcus;
 bool isOpenShift = false;
+int docCounter = 0;
 
 constexpr auto PRINTER_PORT = "COM9";
 constexpr auto PRINTER_COM_SPEED = 57600;
@@ -54,27 +73,31 @@ void messageHandler(int clientID, std::string message) {
 	cout << os.str() << endl;
 	RSJresource res(message);
 	string ev = res["event"].as<string>();
+	RSJresource data = res["data"].as<string>();
 	RSJresource r("{}");
 	r["data"] = RSJresource("{}");
-	string amount;
 	int authID = 0;
+	int err;
 
-	// FIXME <!--
-	if (ev == "test") {
-		vector<RSJresource> wares = res["wares"].as_vector<RSJresource>();
-		for (vector<RSJresource>::iterator it = wares.begin(); it != wares.end(); ++it) {
-			RSJresource ware = *it;
-			string name = ware["name"].as<string>();
-			cout << utf2oem((char*)name.c_str()) << endl;
-		}
+	err = openPort(PRINTER_PORT, PRINTER_COM_SPEED);
+	defer(closePort());
+
+	if (err) {
+		r["data"]["error"] = "true";
+		r["data"]["error_code"] = err;
+		r["data"]["message"] = ws2s(L"Нет связи с ккт");
+		server.wsSend(clientID, r.to_json());
+		return;
 	}
-	// FIXME -->
+	//commandStart();
 
 	if (ev == "open_shift") {
-		string cashier = res["cashier"].as<string>();
-		int err = libOpenShift((char*)utf2oem((char*)cashier.c_str()).c_str());
+		isOpenShift = true;
+		string cashier = data["cashier"].as<string>();
+		err = libOpenShift((char*)utf2oem((char*)cashier.c_str()).c_str());
 		r["event"] = "onopen_shift";
-		if (err > 0) {
+		r["data"]["error"] = "false";
+		if (err) {
 			r["data"]["error"] = "true";
 			server.wsSend(clientID, r.to_json());
 			return;
@@ -83,167 +106,207 @@ void messageHandler(int clientID, std::string message) {
 		server.wsSend(clientID, r.to_json());
 	}
 	else if (ev == "close_shift") {
-		arcus->clearAuths();
-		r["event"] = "onclose_shift";
+		r["event"] = "on_close_shift";
 		r["data"]["error"] = "false";
-		string cashier = res["cashier"].as<string>();
+		string cashier = data["cashier"].as<string>();
 		int err = libPrintZReport((char*)utf2oem((char*)cashier.c_str()).c_str(), 1);
 		if (err) {
 			r["data"]["error"] = "true";
 			r["data"]["text"] = ws2s(L"Ошибка закрытия смены");
 			r["data"]["error_code"] = err;
 		}
+		else {
+			arcus->clearAuths();
+			docCounter = 0;
+		}
 		server.wsSend(clientID, r.to_json());
 	}
 	else if (ev == "force_close_shift") {
-		arcus->clearAuths();
 		int err = libEmergencyCloseShift();
-		r["event"] = "onforce_close_shift";
-		r["data"]["error"] = "false";
-		server.wsSend(clientID, r.to_json());
-	}
-	else if (ev == "purchase") {
-		//MData d = libGetStatusFlags();
-		amount = res["amount"].as<string>();
-		r["event"] = "onpurchase";
-		if (!atoi(amount.c_str())) {
+		r["event"] = "on_force_close_shift";
+		if (err) {
 			r["data"]["error"] = "true";
-			r["data"]["text"] = ws2s(L"Некорректный ввод суммы для оплаты");
-			server.wsSend(clientID, r.to_json());
-			return;
-		}
-		string cashier = res["cashier"].as<string>();
-		string error = "false";
-		string text;
-		int response_code = 0;
-		int err = 0;
-		int err_connect_print = openPort(PRINTER_PORT, PRINTER_COM_SPEED);
-		if (err_connect_print) {
-			error = "true";
-			text = ws2s(L"Нет связи с ккт");
-			goto SENDDATA;
+			r["data"]["error_code"] = err;
 		}
 		else {
-			int doc_type = 2;	// Режим и тип документа (2-продажа, 3-возврат)
-			int num_depart = 1;	// Номер отдела (1..99)
-			int doc_num = std::rand(); // FIXME
-			err = libOpenDocument(
-				doc_type, num_depart, (char*)cashier.c_str(), doc_num
-			); // Открыть документ
-			if (err) {
-				libCancelDocument();
-				error = "true";
-				text = ws2s(L"Не удалось создать документ");
-				goto SENDDATA;
-			}
+			docCounter = 0;
+			arcus->clearAuths();
+			r["data"]["error"] = "false";
+		}
+		server.wsSend(clientID, r.to_json());
+	}
+	else if (ev == "create_doc") {
+		r["event"] = "on_create_doc";
+		string cashier = data["cashier"].as<string>();
+		string error = "false";
+		string text;
+		int err = 0;
+		int num_depart = 1;	// Номер отдела (1..99)
+		int doc_num = ++docCounter;
+		//int doc_num = rand();
+		long long sum = 0;
+		double _sum = 0.0;
+		vector<RSJresource> wares;
 
-			unsigned char taxNumber = 1; // Номер ставки налога (0..5)
-			unsigned char numDepart = 1; // Номер секции (1..16)
-			long long sum = 0;
-			vector<RSJresource> wares = res["wares"].as_vector<RSJresource>();
-			for (vector<RSJresource>::iterator it = wares.begin(); it != wares.end(); ++it) {
-				RSJresource ware = *it;
-				string name = utf2oem((char*)ware["name"].as<string>().c_str());
-				string barcode = utf2oem((char*)ware["barcode"].as<string>().c_str());
-				long quantity = ware["quantity"].as<long>();
-				double price = ware["price"].as<double>();
-				sum += price * 1000;
-				err = libAddPosition(name.c_str(), barcode.c_str(), quantity, price, taxNumber, 0, numDepart, 0, 0, 0);
-				// FIXME
-				if (err) {
-					error = "true";
-					text = ws2s(L"Ошибка добавлнения позиции");
-					libCancelDocument();
-					goto SENDDATA;
-				}
-				// FIXME
-			}
-			
-			//err = libAddPosition("TOBAP N:1 KPEM 'ABCDEFGH'", "9785845913784", quantity, price, taxNumber, 0, numDepart, 0, 0, 0);
-			
-			err = libSubTotal();
-			if (err) {
-				error = "true";
-				text = ws2s(L"Ошибка подъитога");
-				response_code = err;
-				libCancelDocument();
-				goto SENDDATA;
-			}
-			err = libAddPayment(1, sum, "");
-			if (err) {
-				error = "true";
-				text = ws2s(L"Ошибка добавления типа оплаты");
-				libCancelDocument();
-				goto SENDDATA;
-			}
-			// err = libCompareSum(std::stol(amount));
-			//if (err > 0) {
-			//	r["data"]["error"] = "true";
-			//	r["data"]["message"] = ws2s(L"Ошибка сравнения цен");
-			//	libCancelDocument();
-			//	goto PURCHARE;
-			//}
-
-			//libPrintBarCode(2, 8, 8, 8, cashier.c_str());
-			//libCutDocument();
+		int doc_type = data["doc_type"].as<int>();	// Режим и тип документа (2-продажа, 3-возврат)
+		
+		if (!isOpenShift) {
+			text = ws2s(L"Сначала откройте смену");
+			err = 1;
+			goto SENDDATA;
 		}
 
+		if (!(doc_type == 2 || doc_type == 3)) {
+			error = "true";
+			text = ws2s(L"неверный тип документа (2-продажа, 3-возврат)");
+			err = 1;
+			goto SENDDATA;
+		}
+		// Открыть документ
+		//commandStart();
+		err = libOpenDocument(
+			doc_type, 
+			num_depart, 
+			(char*)utf2oem((char*)cashier.c_str()).c_str(), 
+			doc_num
+		);
+		if (err) {
+			libCancelDocument();
+			text = ws2s(L"Не удалось создать документ");
+			goto SENDDATA;
+		}
+		
+		wares = data["wares"].as_vector<RSJresource>();
+		
+		for (vector<RSJresource>::iterator it = wares.begin(); it != wares.end(); ++it) {
+			RSJresource ware = *it;
+			string name = utf2oem((char*)ware["name"].as<string>().c_str());
+			string barcode = utf2oem((char*)ware["barcode"].as<string>().c_str());
+			double quantity = ware["quantity"].as<double>();
+			double price = ware["price"].as<double>();
+			int tax_number = ware["tax_number"].as<int>(); // НДС 0 - 20%, 1 - 10%
+			_sum += price * quantity;
+			err = libAddPosition(name.c_str(), barcode.c_str(), quantity, price, tax_number, 0, num_depart, 0, 0, 0);
+			if (err) {
+				text = ws2s(L"Ошибка добавлнения позиции: " + s2ws(ware["name"].as<string>()));
+				libCancelDocument();
+				goto SENDDATA;
+			}
+			sum = (((int)(_sum * 100 + 0.5)) / 100.0) * 100;
+		}	
+		err = libSubTotal();
+		if (err) {
+			text = ws2s(L"Ошибка подъитога");
+			libCancelDocument();
+			goto SENDDATA;
+		}
+		err = libAddPayment(1, sum, "");
+		if (err) {
+			text = ws2s(L"Ошибка добавления типа оплаты");
+			libCancelDocument();
+			goto SENDDATA;
+		}
+		// err = libCompareSum(std::stol(amount));
+		//if (err > 0) {
+		//	r["data"]["error"] = "true";
+		//	r["data"]["message"] = ws2s(L"Ошибка сравнения цен");
+		//	libCancelDocument();
+		//	goto PURCHARE;
+		//}
+		
 		if (!err) {
-			authID = arcus->auth();
-			arcus->purchase(authID, (char*)amount.c_str());
-			r["data"]["auth_id"] = authID + 1;
-			r["data"]["rrn"] = (const char*)arcus->auths[authID].rrn;
-
-			string cheque = arcus->getCheque();
-			//r["data"]["cheque"] = cp2utf((char*)cheque.c_str());
-			//if (cheque.size()) {
-			//	int err = libPrintString((char*)cheque.c_str(), get_mask(1, 0));
-			//	if (err > 0) {
-			//		int ee = 1;
-			//	}
-			//}
-			if (atoi(arcus->auths[authID].responseCode) > 0) {
+			MData ans = libCloseDocument(0);
+			if (ans.errCode > 0) {
+				text = ws2s(L"Ошибка закрытия документа");
+				err = ans.errCode;
 				error = "true";
-				response_code = atoi(arcus->auths[authID].responseCode);
 				libCancelDocument();
 			}
-			else {
-				MData ans = libCloseDocument(0);
-				if (ans.errCode > 0) {
-					text = ws2s(L"Ошибка закрытия документа");
-					response_code = ans.errCode;
-					error = "true";
-					libCancelDocument();
-				}
-			}
+		}
+		else {
+			error = "true";
 		}
 	SENDDATA:
 		r["data"]["error"] = error;
 		r["data"]["cashier"] = cashier;
-		r["data"]["response_code"] = response_code;
+		r["data"]["error_code"] = err;
+		r["data"]["text"] = text;
+		r["data"]["amount"] = sum;
+		server.wsSend(clientID, r.to_json());
+	}
+	else if (ev == "pay") {
+		r["event"] = "on_pay";
+		string error = "false";
+		string text;
+		string amount = data["amount"].as<string>();
+		if (!stoi(amount)) {
+			error = "true";
+			text = ws2s(L"Ошибка ввода суммы");
+		}
+		else {
+			authID = arcus->auth();
+			arcus->purchase(authID, (char*)amount.c_str());
+			r["data"]["auth_id"] = authID + 1;
+			r["data"]["rrn"] = "LINK_" + string(arcus->auths[authID].rrn);
+			text = cp2utf((char*)arcus->auths[authID].text_message);
+			if (atoi(arcus->auths[authID].responseCode) > 0) {
+				error = "true";
+				err = atoi(arcus->auths[authID].responseCode);
+			}
+		}
+		r["data"]["error"] = error;
+		r["data"]["error_code"] = err;
 		r["data"]["text"] = text;
 		server.wsSend(clientID, r.to_json());
-		closePort();
 	}
-	else if (ev == "cancel") {
-		string auth_id = res["auth_id"].as<string>();
+	else if (ev == "cancel_payment") {
+		r["event"] = "on_cancel_payment";
+		string auth_id = data["auth_id"].as<string>();
+		string error = "false";
+		string text;
 		int oldAuthID = atoi(auth_id.c_str());
-		r["event"] = "oncancel";
 		if (!oldAuthID || arcus->auths.size() < oldAuthID) {
 			r["data"]["error"] = "true";
 			r["data"]["text"] = ws2s(L"Авторизация не найдена");
 			server.wsSend(clientID, r.to_json());
 			return;
 		}
+		
 		//authID = arcus->auth();
-		arcus->cancel(oldAuthID -1);
-		string error = "false";
+		arcus->cancel(oldAuthID - 1);
+		text = cp2utf(arcus->auths[oldAuthID - 1].text_message);
 		if (atoi(arcus->auths[oldAuthID - 1].responseCode) > 0) {
 			error = "true";
 		}
+		
 		r["data"]["error"] = error;
-		r["data"]["response_code"] = (const char*)arcus->auths[oldAuthID - 1].responseCode;
-		r["data"]["text"] = cp2utf(arcus->auths[oldAuthID -1].text_message);
+		r["data"]["error_code"] = atoi((const char*)arcus->auths[oldAuthID - 1].responseCode);
+		r["data"]["text"] = text;
+		server.wsSend(clientID, r.to_json());
+	}
+	else if (ev == "cancel_payment_by_link") {
+		r["event"] = "on_cancel_payment_by_linkt";
+		string rrn = data["rrn"].as<string>();
+		string amount = data["amount"].as<string>();
+		string error = "false";
+		string text;
+		if (rrn == "") {
+			error = "true";
+			text = ws2s(L"Отсутсвует параметр rrn(ссылка платежа)");
+		}
+		else {
+			authID = arcus->auth();
+			const std::regex pattern("[^0-9]");
+			string _rrn = regex_replace(rrn, pattern, "");
+			arcus->force_cancel(authID, (char*)_rrn.c_str(), (char*)amount.c_str());
+			text = cp2utf(arcus->auths[authID].text_message);
+			if (atoi(arcus->auths[authID].responseCode) > 0) {
+				error = "true";
+			}
+		}
+		r["data"]["error"] = error;
+		r["data"]["error_code"] = atoi((const char*)arcus->auths[authID].responseCode);
+		r["data"]["text"] = text;
 		server.wsSend(clientID, r.to_json());
 	}
 }
@@ -269,9 +332,7 @@ void periodicHandler() {
 int main(int argc, char* argv[]) {
 	arcus = new ArcusHandlers();
 	int port = 8000;
-	openPort(PRINTER_PORT, PRINTER_COM_SPEED);
-	commandStart();
-	libBeep(200);
+	//libBeep(200);
 	//cout << "Please set server port: ";
 	//cin >> port;
 	/* set event handler */
@@ -280,6 +341,5 @@ int main(int argc, char* argv[]) {
 	server.setMessageHandler(messageHandler);
 	//server.setPeriodicHandler(periodicHandler);
 	server.startServer(port);
-	closePort();
 	return 0;
 }

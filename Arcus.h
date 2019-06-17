@@ -150,6 +150,7 @@ namespace Arcus {
 		void clearAuths(void);
 		void purchase(int, char*);
 		void cancel(int);
+		void force_cancel(int, char*, char*);
 		void apply(int);
 		int getNextAuthID(void);
 		int addAuth(UserAuthIntFull auth);

@@ -60,6 +60,13 @@ void ArcusHandlers::cancel(int authID) {
 	this->apply(authID);
 }
 
+void ArcusHandlers::force_cancel(int authID, char* rrn, char* amount) {
+	this->auths[authID].operType = 3;
+	strncpy_s(this->auths[authID].rrn, sizeof(this->auths[authID].rrn), rrn, sizeof(rrn) * 4);
+	strncpy_s(this->auths[authID].amount, sizeof(this->auths[authID].amount), amount, sizeof(amount) * 4);
+	this->apply(authID);
+}
+
 void ArcusHandlers::clearAuths() {
 	this->auths.clear();
 }
