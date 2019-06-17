@@ -34,6 +34,7 @@
 #include <iostream>
 #include <climits>
 #include <regex>
+#include <iomanip>
 
 
 char const* RSJobjectbrackets = "{}";
@@ -493,7 +494,9 @@ std::string RSJresource::to_json() {
 				ret = std::to_string(std::stof(data));
 			}
 			else {
-				ret = "\"" + data + "\"";
+				std::stringstream ss;
+				ss << std::quoted(data);
+				ret = ss.str();
 			}
 		}
 			

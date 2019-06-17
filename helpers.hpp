@@ -11,14 +11,12 @@ namespace Helpers {
 	std::wstring s2ws(const std::string& str) {
 		using convert_typeX = std::codecvt_utf8<wchar_t>;
 		std::wstring_convert<convert_typeX, wchar_t> converterX;
-
 		return converterX.from_bytes(str);
 	};
 
 	std::string ws2s(const std::wstring& wstr) {
 		using convert_typeX = std::codecvt_utf8<wchar_t>;
 		std::wstring_convert<convert_typeX, wchar_t> converterX;
-
 		return converterX.to_bytes(wstr);
 	};
 
@@ -60,6 +58,20 @@ namespace Helpers {
 		res[j] = '\0';
 	std:string s(res);
 		return s;
+	};
+
+	std::string utf2oem(char* pszCode) {
+		BSTR bstrWide;
+		char pszAnsi[4096];
+		int nLength;
+		char* text;
+		nLength = MultiByteToWideChar(CP_UTF8, 0, pszCode, strlen(pszCode) + 1, NULL, NULL);
+		bstrWide = SysAllocStringLen(NULL, nLength);
+		MultiByteToWideChar(CP_UTF8, 0, pszCode, strlen(pszCode) + 1, bstrWide, nLength);
+		nLength = WideCharToMultiByte(CP_OEMCP, 0, bstrWide, -1, NULL, 0, NULL, NULL);
+		WideCharToMultiByte(CP_OEMCP, 0, bstrWide, -1, pszAnsi, nLength, NULL, NULL);
+		SysFreeString(bstrWide);
+		return string(pszAnsi);
 	};
 
 	unsigned int get_mask(unsigned int pos, unsigned int n) {
