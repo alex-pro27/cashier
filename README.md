@@ -10,7 +10,7 @@
 ## Ответ:
 ```ts
 {
-    "event": "on_event_name",   // событие
+    "event": "onevent_name",   // событие
     "data": {
         "error": boolean,       // Ошибка (да/нет)
         "error_code": number    // Код ошибки
@@ -34,7 +34,7 @@
 `Ответ`
 ```js
     {
-        event: "on_open_shift",
+        event: "onopen_shift",
         data: {
             error: false
         }
@@ -54,7 +54,7 @@
 `Ответ`
 ```js
     {
-        event: "on_close_shift",
+        event: "onclose_shift",
         data: {
             error: false
         }
@@ -71,7 +71,7 @@
 `Ответ`
 ```js
 {
-    event: "on_force_close_shift",
+    event: "onforce_close_shift",
     data: {
         error: false
     }
@@ -101,7 +101,7 @@
 `Ответ`
 ```js
     {
-        event: "on_create_doc",
+        event: "oncreate_doc",
         data: {
             error: false,           
             amount: 2469,               // Сумма для оплаты (в копейках)
@@ -125,7 +125,7 @@
 `Ответ`
 ```js
     {
-        event: "on_pay",
+        event: "onpay",
         data: {
             error: false,     
             rrn: "LINK_916913195426",   // ссылка платежа
@@ -149,7 +149,7 @@
 `Ответ`
 ```js
     {
-        event: "on_cancel_payment",
+        event: "oncancel_payment",
         data: {
             error: false,
             response_code: 0,
@@ -172,7 +172,7 @@
 `Ответ`
 ```js
     {
-        event: "on_cancel_payment_by_link",
+        event: "oncancel_payment_by_link",
         data: {
             error: false,
             response_code: 0,

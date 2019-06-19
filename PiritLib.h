@@ -1,3 +1,7 @@
+#pragma once
+#ifndef PrintLib_H
+#define PrintLib_H
+
 #pragma comment(lib, "PiritLib.lib")
 #define IMPORTDLL extern "C" __declspec(dllimport)
 #define PIRITLIB_CALL __stdcall
@@ -173,3 +177,5 @@ IMPORTDLL int PIRITLIB_CALL libRegistrationEx(unsigned char type, const char *re
 IMPORTDLL int PIRITLIB_CALL libGetInfoFromECT_NumberFP(char *data);
 IMPORTDLL int PIRITLIB_CALL libGetInfoFromECT_FP(int numDoc, char *data);
 IMPORTDLL unsigned long PIRITLIB_CALL libFormatMessage(int errorCode, char *msgBuffer, unsigned long cbBuffer);
+
+#endif // PrintLib_H

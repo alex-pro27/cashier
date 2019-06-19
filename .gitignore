@@ -283,6 +283,7 @@ node_modules/
 **/*.Server/GeneratedArtifacts
 **/*.Server/ModelManifest.xml
 _Pvt_Extensions
+enc_temp_folder/
 
 # Paket dependency manager
 .paket/paket.exe

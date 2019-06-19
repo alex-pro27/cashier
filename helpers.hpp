@@ -1,10 +1,26 @@
 #pragma once
 #ifndef HELPERS_H
 #define HELPERS_H
+#define DEFER_1(x, y) x##y
+#define DEFER_2(x, y) DEFER_1(x, y)
+#define DEFER_3(x)    DEFER_2(x, __COUNTER__)
+#define defer(code)   auto DEFER_3(_defer_) = defer_func([&](){code;})
 
 #include <locale> 
 #include <codecvt>
 #include <string>
+
+template <typename F>
+struct privDefer {
+	F f;
+	privDefer(F f) : f(f) {}
+	~privDefer() { f(); }
+};
+
+template <typename F>
+privDefer<F> defer_func(F f) {
+	return privDefer<F>(f);
+}
 
 namespace Helpers {
 
@@ -20,7 +36,7 @@ namespace Helpers {
 		return converterX.to_bytes(wstr);
 	};
 
-	std::string cp2utf(char* str) {
+	std::string _cp2utf(char* str) {
 		char res[4096];
 		static const short utf[256] = {
 			0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf,0x10,0x11,0x12,0x13,0x14,0x15,0x16,
@@ -60,18 +76,30 @@ namespace Helpers {
 		return s;
 	};
 
-	std::string utf2oem(char* pszCode) {
+	std::string transcode(char* pszCode, int from, int to) {
 		BSTR bstrWide;
 		char pszAnsi[4096];
 		int nLength;
 		char* text;
-		nLength = MultiByteToWideChar(CP_UTF8, 0, pszCode, strlen(pszCode) + 1, NULL, NULL);
+		nLength = MultiByteToWideChar(from, 0, pszCode, strlen(pszCode) + 1, NULL, NULL);
 		bstrWide = SysAllocStringLen(NULL, nLength);
-		MultiByteToWideChar(CP_UTF8, 0, pszCode, strlen(pszCode) + 1, bstrWide, nLength);
-		nLength = WideCharToMultiByte(CP_OEMCP, 0, bstrWide, -1, NULL, 0, NULL, NULL);
-		WideCharToMultiByte(CP_OEMCP, 0, bstrWide, -1, pszAnsi, nLength, NULL, NULL);
+		MultiByteToWideChar(to, 0, pszCode, strlen(pszCode) + 1, bstrWide, nLength);
+		nLength = WideCharToMultiByte(to, 0, bstrWide, -1, NULL, 0, NULL, NULL);
+		WideCharToMultiByte(to, 0, bstrWide, -1, pszAnsi, nLength, NULL, NULL);
 		SysFreeString(bstrWide);
 		return string(pszAnsi);
+	};
+
+	std::string cp2utf(char* pszCode) {
+		return transcode(pszCode, CP_ACP, CP_UTF8);
+	}
+
+	std::string utf2oem(char* pszCode) {
+		return transcode(pszCode, CP_UTF8, CP_OEMCP);
+	};
+
+	std::string cp2oem(char* pszCode) {
+		return transcode(pszCode, CP_ACP, CP_OEMCP);
 	};
 
 	unsigned int get_mask(unsigned int pos, unsigned int n) {
