@@ -145,9 +145,7 @@ private:
 	_PCPOSFUNCFULL ProcessOwFull;
 	HMODULE hLib;
 public:
-
 	vector<UserAuthIntFull> auths;
-
 	ArcusHandlers();
 	~ArcusHandlers();
 	int auth(void);

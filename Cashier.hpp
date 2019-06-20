@@ -4,13 +4,12 @@
 
 #include <iostream>
 #include <string>
+#include <regex>
+#include <fstream>
 #include "websocket.h"
 #include "Arcus.hpp"
 #include "json.hpp"
 #include "helpers.hpp"
-#include <regex>
-#include <fstream>
-#include <windows.h>
 #include "PiritLib.h"
 
 using namespace std;
@@ -19,6 +18,7 @@ using namespace Helpers;
 class CashierHandlers {
 public:
 	RSJresource answer;
+	ArcusHandlers* arcus;
 	CashierHandlers();
 	~CashierHandlers();
 	RSJresource openShift(string ev, RSJresource data);
@@ -32,7 +32,6 @@ public:
 private:
 	bool is_open_shift = false;
 	int doc_counter = 0;
-	ArcusHandlers* arcus;
 	void printCheque();
 };
 
@@ -113,7 +112,8 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 	string error;
 	string text;
 	string cashier = data["cashier"].as<string>();
-	int num_depart = 1;	// Номер отдела (1..99)
+	int num_depart = 1;	
+	// Номер отдела (1..99)
 	int doc_num = ++this->doc_counter;
 	long long sum = 0;
 	double _sum = 0.0;
@@ -150,10 +150,10 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 
 	if (pyment_type == 1) {
 		// Оплата безналичным
-		authID = arcus->auth();
+		authID = this->arcus->auth();
 
 		if (doc_type == 2) {
-			arcus->purchase(authID, (char*)sum);
+			this->arcus->purchase(authID, (char*)to_string(sum).c_str());
 		}
 		else if (doc_type == 3) {
 			string rrn = data["rrn"].as<string>();
@@ -164,18 +164,18 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 			}
 			const regex pattern("[^0-9]");
 			string _rrn = regex_replace(rrn, pattern, "");
-			arcus->cancelByLink(authID, (char*)_rrn.c_str(), (char*)sum);
+			this->arcus->cancelByLink(authID, (char*)_rrn.c_str(), (char*)to_string(sum).c_str());
 		}
 
 		text = cp2utf((char*)arcus->auths[authID].text_message);
-		err_code = atoi(arcus->auths[authID].responseCode);
+		err_code = atoi(this->arcus->auths[authID].responseCode);
 
 		if (err_code) {
 			this->answer["data"]["auth_id"] = authID + 1;
 			goto SEND;
 		}
 		flag_cashless = true;
-		this->answer["data"]["rrn"] = "LINK_" + string(arcus->auths[authID].rrn);
+		this->answer["data"]["rrn"] = "LINK_" + string(this->arcus->auths[authID].rrn);
 		this->answer["data"]["auth_id"] = authID + 1;
 	}
 	else if (pyment_type == 0) {
@@ -192,10 +192,16 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 
 	if (err_code) {
 		text = ws2s(L"Не удалось создать документ");
+		libCancelDocument();
 		goto SEND;
 	}
 	flag_is_opened_doc = true;
-	this->printCheque();
+
+	if (flag_cashless) {
+		// Если безнали, то печатаем чек оплаты и копию
+		this->printCheque();
+		this->printCheque();
+	}
 
 	for (vector<RSJresource>::iterator it = wares.begin(); it != wares.end(); ++it) {
 		RSJresource ware = *it;
@@ -216,7 +222,6 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 
 	if (err_code) {
 		text = ws2s(L"Ошибка подъитога");
-		libCancelDocument();
 		goto SEND;
 	}
 
@@ -254,8 +259,70 @@ SEND:
 }
 
 RSJresource CashierHandlers::cashDrawerHandler(string ev, RSJresource data) {
-	// TODO внесение/возврат средсв в денежный ящик
-	return RSJresource();
+	this->answer["event"] = "on" + ev;
+	this->answer["data"] = RSJresource("{}");
+	int err_code = 0;
+	bool flag_is_opened_doc = false;
+	string error;
+	string text;
+	string cashier = data["cashier"].as<string>();
+	// Сумма в копейках
+	string amount = data["amount"].as<string>();
+	// Номер отдела (1..99)
+	int num_depart = 1;
+	// Номер документа
+	int doc_num = ++this->doc_counter;
+	// Режим и тип документа (4 - внесение, 5 - изъятие)
+	int doc_type = data["doc_type"].as<int>();
+
+	if (!(doc_type == 4 || doc_type == 5)) {
+		error = "true";
+		text = ws2s(L"Неверный тип документа (4-внесение, 5-изъятие)");
+		err_code = 1;
+		goto SEND;
+	}
+
+	// Открыть документ
+	err_code = libOpenDocument(
+		doc_type,
+		num_depart,
+		(char*)utf2oem((char*)cashier.c_str()).c_str(),
+		doc_num
+	);
+	if (err_code) {
+		text = ws2s(L"Не удалось создать документ");
+		libCancelDocument();
+		goto SEND;
+	}
+	flag_is_opened_doc = true;
+	libOpenCashDrawer(0);
+	err_code = libCashInOut("", atoi(amount.c_str()));
+	if (err_code > 0) {
+		text = ws2s(L"Не удалось внести/изъять деньги");
+		goto SEND;
+	}
+
+	if (!err_code) {
+		// Закрыть документ
+		MData ans = libCloseDocument(0);
+		if (ans.errCode > 0) {
+			text = ws2s(L"Ошибка закрытия документа");
+			err_code = ans.errCode;
+		}
+	}
+
+SEND:
+	if (err_code) {
+		error = "true";
+		if (flag_is_opened_doc)
+			libCancelDocument();
+	}
+	this->answer["data"]["error"] = error;
+	this->answer["data"]["cashier"] = cashier;
+	this->answer["data"]["error_code"] = err_code;
+	this->answer["data"]["text"] = text;
+	this->answer["data"]["amount"] = amount;
+	return this->answer;
 }
 
 RSJresource CashierHandlers::cancelPymentByLink(string ev, RSJresource data) {
@@ -294,6 +361,7 @@ RSJresource CashierHandlers::setZeroCashDrawer(string ev, RSJresource data) {
 	this->answer["data"] = RSJresource("{}");
 	string error = "false";
 	string text;
+	libOpenCashDrawer(0);
 	int err_code = libSetToZeroCashInCashDrawer();
 	if (err_code) {
 		error = "true";

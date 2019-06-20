@@ -9,7 +9,6 @@
 #include "helpers.hpp"
 #include "PiritLib.h"
 #include "Arcus.hpp"
-#include <windows.h>
 
 using namespace std;
 using namespace Helpers;
@@ -27,7 +26,7 @@ void openHandler(int clientID) {
 	vector<int> clientIDs = server.getClientIDs();
 	RSJresource r("{}");
 	r["data"] = RSJresource("{}");
-	r["event"] = "onopen";
+	r["event"] = "onconnected";
 	r["data"]["text"] = "Welcome!";
 	r["last_answer"] = cashier->answer;
 	server.wsSend(clientID, r.to_json());
@@ -50,7 +49,7 @@ void messageHandler(int clientID, std::string message) {
 	int err_code = openPort(PRINTER_PORT, PRINTER_COM_SPEED);
 	defer(closePort());
 
-	if (!err_code) { // FIXME
+	if (err_code) {
 		RSJresource r("{}");
 		r["event"] = "on" + ev;
 		r["data"] = RSJresource("{}");
@@ -73,6 +72,9 @@ void messageHandler(int clientID, std::string message) {
 	}
 	else if (ev == "new_transaction") {
 		server.wsSend(clientID, cashier->transactionHandler(ev, data).to_json());
+	}
+	else if (ev == "cancel_pyment") {
+		server.wsSend(clientID, cashier->cancelPymentByLink(ev, data).to_json());
 	}
 	else if (ev == "set_zero_cash") {
 		server.wsSend(clientID, cashier->setZeroCashDrawer(ev, data).to_json());

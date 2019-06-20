@@ -33,12 +33,12 @@
 ```
 `Ответ`
 ```js
-    {
-        event: "onopen_shift",
-        data: {
-            error: false
-        }
-    }
+{
+	event: "onopen_shift",
+	data: {
+		error: false
+	}
+}
 ```
 
 ### [Завершение смены]:
@@ -53,12 +53,13 @@
 ```
 `Ответ`
 ```js
-    {
-        event: "onclose_shift",
-        data: {
-            error: false
-        }
-    }
+{
+	event: "onclose_shift",
+	data: {
+		error: false,
+		error_code: 0,
+	}
+}
 ```
 
 ### [Принудительное(Аварийное) завершение смены]:
@@ -73,19 +74,22 @@
 {
     event: "onforce_close_shift",
     data: {
-        error: false
+        error: false,
+        error_code: 0
     }
 }
 ```
 
-### [Новый документ (чек)]:
+### [Новая транзакция]:
 `Запрос`
 ```js
 {
-    event: "create_doc", 
+    event: "new_transaction", 
     data: {
-        cashier: "Сидр Петров", // Кассир
-        doc_type: 2,            // Режим и тип документа (2-продажа, 3-возврат),
+        cashier: "Сидр Петров",     // Кассир
+        doc_type: 2,                // Режим и тип документа (2-продажа, 3-возврат),
+        pyment_type: 1,             // 0 - наличка, 1 - безнал
+        rrn: "LINK_917113269868",   //опционально: ссылка безналичного платежа (если нужно сделать возврат)
         wares: [
             {
                 name: "Водка Айс 0,5л 40%", // Наименование товара
@@ -100,40 +104,17 @@
 ```
 `Ответ`
 ```js
-    {
-        event: "oncreate_doc",
-        data: {
-            error: false,           
-            amount: 2469,               // Сумма для оплаты (в копейках)
-            cashier: "Сидр Петров",     // Касир
-            error_code: 0,              // Код ошибки
-            text: "Успешно"             // Сообщение
-        }
-    }
-```
-
-### [Оплата]:
-`Запрос`
-```js
 {
-    event: "pay", 
-    data: {
-        amount: 2469 // Количество (в копейкай)
-    }
+	event: "onnew_transaction",
+	data: {
+		error: false,           
+		amount: 2469,               // Сумма для оплаты (в копейках)
+		cashier: "Сидр Петров",     // Касир
+		error_code: 0,              // Код ошибки
+		text: "Успешно"             // Сообщение
+		rrn: "LINK_917113269868",   // ссылка безналичного платежа 
+	}
 }
-```
-`Ответ`
-```js
-    {
-        event: "onpay",
-        data: {
-            error: false,     
-            rrn: "LINK_916913195426",   // ссылка платежа
-            auth_id: 1,                 // id оплаты
-            error_code: 0,              // Код ошибки
-            text: "Успешно"             // Сообщение
-        }
-    }
 ```
 
 ### [Отмена платежа]:
@@ -142,41 +123,43 @@
 {
     event: "cancel_payment", 
     data: {
-        auth_id: 1,                 // id оплаты
+        rrn: "LINK_917113269868",   // ссылка безналичного платежа,
+        amount: 2469,               // Сумма для оплаты (в копейках)
     }
 }
 ```
 `Ответ`
 ```js
-    {
-        event: "oncancel_payment",
-        data: {
-            error: false,
-            response_code: 0,
-            text: "Успешно",
-        }
-    }
+{
+	event: "oncancel_payment",
+	data: {
+		error: false,
+		error_code: 0,
+		text: "Успешно",
+	}
+}
 ```
 
-### [Отмена платежа по ссылке]:
+### [Внесение/Изъятие из денежного ящика]:
 `Запрос`
 ```js
 {
-    event: "cancel_payment_by_link", 
+    event: "cash_drawer_handler",
     data: {
-        rrn: "LINK_916913195426",   // Ссылка платежа,
-        amount: 2469                // сумма платежа (в копейкай)
+        cashier: "Сидр Петров",     // Кассир,
+        amount: 2469,               // сумма ввнесениы(в копейках)
+        doc_type: 4                 // Режим и тип документа (4 - внесение, 5 - изъятие)
     }
 }
 ```
 `Ответ`
 ```js
-    {
-        event: "oncancel_payment_by_link",
-        data: {
-            error: false,
-            response_code: 0,
-            text: "Успешно",
-        }
-    }
+{
+	event: "oncash_drawer_handler",
+	data: {
+		error: false,
+		error_code: 0,
+		text: "Успешно",
+	}
+}
 ```
