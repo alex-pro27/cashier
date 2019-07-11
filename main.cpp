@@ -27,7 +27,6 @@ void openHandler(int clientID) {
 	RSJresource r("{}");
 	r["data"] = RSJresource("{}");
 	r["event"] = "onconnected";
-	r["data"]["text"] = "Welcome!";
 	r["last_answer"] = cashier->answer;
 	server.wsSend(clientID, r.to_json());
 }
@@ -55,7 +54,7 @@ void messageHandler(int clientID, std::string message) {
 		r["data"] = RSJresource("{}");
 		r["data"]["error"] = "true";
 		r["data"]["error_code"] = err_code;
-		r["data"]["message"] = ws2s(L"Нет связи с ккт");
+		r["data"]["text"] = ws2s(L"Нет связи с ккт");
 		server.wsSend(clientID, r.to_json());
 		return;
 	}
@@ -82,6 +81,9 @@ void messageHandler(int clientID, std::string message) {
 	else if (ev == "cash_drawer_handler") {
 		server.wsSend(clientID, cashier->cashDrawerHandler(ev, data).to_json());
 	}
+	else if (ev == "get_kkt_info") {
+		server.wsSend(clientID, cashier->KKTInfo(ev, data).to_json());
+	}
 	else {
 		char text[80];
 		RSJresource r("{}");
@@ -97,7 +99,6 @@ void messageHandler(int clientID, std::string message) {
 
 int main(int argc, char* argv[]) {
 	int port = 8000;
-	//libBeep(200);
 	//cout << "Please set server port: ";
 	//cin >> port;
 	/* set event handler */

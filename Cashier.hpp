@@ -28,9 +28,14 @@ public:
 	RSJresource cashDrawerHandler(string ev, RSJresource data);
 	RSJresource cancelPymentByLink(string ev, RSJresource data);
 	RSJresource setZeroCashDrawer(string ev, RSJresource data);
+	RSJresource KKTInfo(string ev, RSJresource data);
+	string getKKTInfo(int num);
+	string getFnNumber();
+	string getCacheBalance();
+	string getINN();
+	string getShiftNumber();
 
 private:
-	bool is_open_shift = false;
 	int doc_counter = 0;
 	void printCheque();
 };
@@ -58,10 +63,14 @@ RSJresource CashierHandlers::openShift(string ev, RSJresource data) {
 		text = ws2s(L"Ошибка открытия смены");
 	}
 	
-	this->is_open_shift = true;
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
+	this->answer["data"]["cacher"] = cashier;
+	this->answer["data"]["inn"] = getINN();
+	this->answer["data"]["cache_balance"] = this->getCacheBalance();
+	this->answer["data"]["shift_number"] = this->getShiftNumber();
+	this->answer["data"]["fn_number"] = this->getFnNumber();
 	return this->answer;
 }
 
@@ -78,12 +87,16 @@ RSJresource CashierHandlers::closeShift(string ev, RSJresource data) {
 		text = ws2s(L"Ошибка закрытия смены");
 	}
 
-	this->is_open_shift = false;
 	this->arcus->clearAuths();
 	this->doc_counter = 0;
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
+	this->answer["data"]["cacher"] = cashier;
+	this->answer["data"]["inn"] = getINN();
+	this->answer["data"]["cache_balance"] = this->getCacheBalance();
+	this->answer["data"]["shift_number"] = this->getShiftNumber();
+	this->answer["data"]["fn_number"] = this->getFnNumber();
 	return this->answer;
 }
 
@@ -96,10 +109,13 @@ RSJresource CashierHandlers::forceCloseShift(string ev, RSJresource data) {
 		this->answer["data"]["error_code"] = err_code;
 	}
 	else {
-		this->is_open_shift = false;
 		this->arcus->clearAuths();
 		this->doc_counter = 0;
 		this->answer["data"]["error"] = "false";
+		this->answer["data"]["inn"] = this->getINN();
+		this->answer["data"]["cache_balance"] = this->getCacheBalance();
+		this->answer["data"]["shift_number"] = this->getShiftNumber();
+		this->answer["data"]["fn_number"] = this->getFnNumber();
 	}
 	return this->answer;
 }
@@ -126,12 +142,6 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 	vector<RSJresource> wares = data["wares"].as_vector<RSJresource>();
 	bool flag_cashless = false;
 	bool flag_is_opened_doc = false;
-
-	if (!this->is_open_shift) {
-		text = ws2s(L"Сначала откройте смену");
-		err_code = 1;
-		goto SEND;
-	}
 
 	if (!(doc_type == 2 || doc_type == 3)) {
 		error = "true";
@@ -240,6 +250,16 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 			text = ws2s(L"Ошибка закрытия документа");
 			err_code = ans.errCode;
 		}
+		else {
+			MData ans = libGetReceiptData(2);
+			if (ans.errCode == 0) {
+				string _data(ans.data);
+				auto s = split(_data.substr(8, ans.dataLength - 12), "\x1c");
+				this->answer["data"]["check_number"] = s[1];
+				this->answer["data"]["doc_number"] = s[3];
+				this->answer["data"]["discount_sum"] = s[5];
+			}
+		}
 	}
 
 SEND:
@@ -250,13 +270,19 @@ SEND:
 		if (flag_cashless)
 			this->arcus->cancelLast(authID);
 	}
+	else {
+		this->answer["data"]["amount"] = sum;
+		this->answer["data"]["inn"] = getINN();
+		this->answer["data"]["cache_balance"] = this->getCacheBalance();
+		this->answer["data"]["shift_number"] = this->getShiftNumber();
+		this->answer["data"]["fn_number"] = this->getFnNumber();
+	}
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["cashier"] = cashier;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
-	this->answer["data"]["amount"] = sum;
 	return this->answer;
-}
+};
 
 RSJresource CashierHandlers::cashDrawerHandler(string ev, RSJresource data) {
 	this->answer["event"] = "on" + ev;
@@ -317,13 +343,19 @@ SEND:
 		if (flag_is_opened_doc)
 			libCancelDocument();
 	}
+	else {
+		this->answer["data"]["inn"] = getINN();
+		this->answer["data"]["cache_balance"] = this->getCacheBalance();
+		this->answer["data"]["shift_number"] = this->getShiftNumber();
+		this->answer["data"]["fn_number"] = this->getFnNumber();
+		this->answer["data"]["amount"] = amount;
+	}
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["cashier"] = cashier;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
-	this->answer["data"]["amount"] = amount;
 	return this->answer;
-}
+};
 
 RSJresource CashierHandlers::cancelPymentByLink(string ev, RSJresource data) {
 	this->answer["event"] = "on" + ev;
@@ -353,8 +385,12 @@ RSJresource CashierHandlers::cancelPymentByLink(string ev, RSJresource data) {
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
+	this->answer["data"]["inn"] = getINN();
+	this->answer["data"]["cache_balance"] = this->getCacheBalance();
+	this->answer["data"]["shift_number"] = this->getShiftNumber();
+	this->answer["data"]["fn_number"] = this->getFnNumber();
 	return this->answer;
-}
+};
 
 RSJresource CashierHandlers::setZeroCashDrawer(string ev, RSJresource data) {
 	this->answer["event"] = "on" + ev;
@@ -370,8 +406,56 @@ RSJresource CashierHandlers::setZeroCashDrawer(string ev, RSJresource data) {
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
+	this->answer["data"]["inn"] = getINN();
+	this->answer["data"]["cache_balance"] = this->getCacheBalance();
+	this->answer["data"]["shift_number"] = this->getShiftNumber();
+	this->answer["data"]["fn_number"] = this->getFnNumber();
 	return this->answer;
-}
+};
+
+RSJresource CashierHandlers::KKTInfo(string ev, RSJresource data) {
+	this->answer["event"] = "on" + ev;
+	this->answer["data"] = RSJresource("{}");
+	this->answer["data"]["inn"] = getINN();
+	this->answer["data"]["cache_balance"] = this->getCacheBalance();
+	this->answer["data"]["shift_number"] = this->getShiftNumber();
+	this->answer["data"]["fn_number"] = this->getFnNumber();
+	return this->answer;
+};
+
+string CashierHandlers::getKKTInfo(int num) {
+	MData inf = libGetKKTInfo(num);
+	if (inf.errCode == 0) {
+		string data(inf.data);
+		return data.substr(8, inf.dataLength - 12);
+	}
+	else {
+		return NULL;
+	}
+};
+
+string CashierHandlers::getFnNumber() {
+	return this->getKKTInfo(1);
+};
+
+inline string CashierHandlers::getCacheBalance() {
+	return this->getKKTInfo(7);
+};
+
+inline string CashierHandlers::getINN() {
+	return this->getKKTInfo(3);
+};
+
+inline string CashierHandlers::getShiftNumber() {
+	MData inf = libGetCountersAndRegisters(1);
+	if (inf.errCode == 0) {
+		string data(inf.data);
+		return data.substr(8, inf.dataLength - 12);
+	}
+	else {
+		return NULL;
+	}
+};
 
 inline void CashierHandlers::printCheque() {
 	// Напечатать чек оплаты по безналу (только если открыт документ)
