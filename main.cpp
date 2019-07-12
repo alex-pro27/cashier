@@ -84,6 +84,9 @@ void messageHandler(int clientID, std::string message) {
 	else if (ev == "get_kkt_info") {
 		server.wsSend(clientID, cashier->KKTInfo(ev, data).to_json());
 	}
+	else if (ev == "z_report") {
+		server.wsSend(clientID, cashier->zReport(ev, data).to_json());
+	}
 	else {
 		char text[80];
 		RSJresource r("{}");

@@ -488,7 +488,7 @@ std::string RSJresource::to_json() {
 				ret = data;
 			}
 			else if (!is_not_int && std::regex_match(data, std::regex("^\\d+$"))) {
-				ret = std::to_string(atoi(data.c_str()));
+				ret = std::to_string(std::stoll(data));
 			}
 			else if (!is_not_int && std::regex_match(data, std::regex("^\\d+\.\\d+$"))) {
 				ret = std::to_string(std::stod(data));

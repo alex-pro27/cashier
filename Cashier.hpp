@@ -15,25 +15,55 @@
 using namespace std;
 using namespace Helpers;
 
+typedef MData(__stdcall* libMethod)(unsigned char numRequest);
+
+string requestDecorator(int num, libMethod method) {
+	MData inf = method(num);
+	if (inf.errCode == 0) {
+		string data(inf.data);
+		return data.substr(8, inf.dataLength - 12);
+	}
+	else {
+		return string("");
+	}
+};
+
 class CashierHandlers {
 public:
 	RSJresource answer;
 	ArcusHandlers* arcus;
 	CashierHandlers();
 	~CashierHandlers();
+	/*Открыть смеру*/
 	RSJresource openShift(string ev, RSJresource data);
+	/*Закрыть смену*/
 	RSJresource closeShift(string ev, RSJresource data);
+	/*Принудительное завершение смены*/
 	RSJresource forceCloseShift(string ev, RSJresource data);
+	/*Новая транзакция Оплата/Возварат*/
 	RSJresource transactionHandler(string ev, RSJresource data);
+	/*Открыть денежный ящик*/
 	RSJresource cashDrawerHandler(string ev, RSJresource data);
+	/*Отменить безналичный платеж по ссылке*/
 	RSJresource cancelPymentByLink(string ev, RSJresource data);
+	/*Внести деньги в денежный ящик*/
 	RSJresource setZeroCashDrawer(string ev, RSJresource data);
+	/*Получить информацию о ККТ*/
 	RSJresource KKTInfo(string ev, RSJresource data);
-	string getKKTInfo(int num);
-	string getFnNumber();
-	string getCacheBalance();
-	string getINN();
-	string getShiftNumber();
+	/*Получить z-отчет о последней закрытой смене*/
+	RSJresource zReport(string ev, RSJresource data);
+	/*Добавить в ответ информацию о фискальнике*/
+	void addKKTINFO();
+	/*Добавить в ответ z-отчет*/
+	void addZReport();
+	/*Добавить в ответ информацию о скидках и наценках*/
+	void addMarckupAndDiscountInfo();
+	/*Добавить в ответ информацию о нарастающих суммах продаж и возвратов*/
+	void addProgressiveTotalSales();
+	/*Добавить в ответ номер смены*/
+	void addShiftNumber();
+	/*Добавить в ответ информацию о последнем чеке*/
+	void addLastChequeInfo();
 
 private:
 	int doc_counter = 0;
@@ -43,11 +73,11 @@ private:
 CashierHandlers::CashierHandlers() {
 	this->arcus = new ArcusHandlers();
 	this->answer = RSJresource("{}");
-}
+};
 
 CashierHandlers::~CashierHandlers() {
 	delete this->arcus;
-}
+};
 
 RSJresource CashierHandlers::openShift(string ev, RSJresource data) {
 	int err_code = 0;
@@ -62,17 +92,15 @@ RSJresource CashierHandlers::openShift(string ev, RSJresource data) {
 		error = "true";
 		text = ws2s(L"Ошибка открытия смены");
 	}
-	
+
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
 	this->answer["data"]["cacher"] = cashier;
-	this->answer["data"]["inn"] = getINN();
-	this->answer["data"]["cache_balance"] = this->getCacheBalance();
-	this->answer["data"]["shift_number"] = this->getShiftNumber();
-	this->answer["data"]["fn_number"] = this->getFnNumber();
+	this->addKKTINFO();
+	this->addProgressiveTotalSales();
 	return this->answer;
-}
+};
 
 RSJresource CashierHandlers::closeShift(string ev, RSJresource data) {
 	int err_code = 0;
@@ -93,12 +121,10 @@ RSJresource CashierHandlers::closeShift(string ev, RSJresource data) {
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
 	this->answer["data"]["cacher"] = cashier;
-	this->answer["data"]["inn"] = getINN();
-	this->answer["data"]["cache_balance"] = this->getCacheBalance();
-	this->answer["data"]["shift_number"] = this->getShiftNumber();
-	this->answer["data"]["fn_number"] = this->getFnNumber();
+	this->addKKTINFO();
+	this->addZReport();
 	return this->answer;
-}
+};
 
 RSJresource CashierHandlers::forceCloseShift(string ev, RSJresource data) {
 	int err_code = libEmergencyCloseShift();
@@ -112,13 +138,20 @@ RSJresource CashierHandlers::forceCloseShift(string ev, RSJresource data) {
 		this->arcus->clearAuths();
 		this->doc_counter = 0;
 		this->answer["data"]["error"] = "false";
-		this->answer["data"]["inn"] = this->getINN();
-		this->answer["data"]["cache_balance"] = this->getCacheBalance();
-		this->answer["data"]["shift_number"] = this->getShiftNumber();
-		this->answer["data"]["fn_number"] = this->getFnNumber();
+		this->addKKTINFO();
+		this->addZReport();
 	}
 	return this->answer;
-}
+};
+
+RSJresource CashierHandlers::zReport(string ev, RSJresource data) {
+	this->answer["event"] = "on" + ev;
+	this->answer["data"] = RSJresource("{}");
+	this->answer["data"]["error"] = "false";
+	this->addKKTINFO();
+	this->addZReport();
+	return this->answer;
+};
 
 RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 	this->answer["event"] = "on" + ev;
@@ -251,14 +284,7 @@ RSJresource CashierHandlers::transactionHandler(string ev, RSJresource data) {
 			err_code = ans.errCode;
 		}
 		else {
-			MData ans = libGetReceiptData(2);
-			if (ans.errCode == 0) {
-				string _data(ans.data);
-				auto s = split(_data.substr(8, ans.dataLength - 12), "\x1c");
-				this->answer["data"]["check_number"] = s[1];
-				this->answer["data"]["doc_number"] = s[3];
-				this->answer["data"]["discount_sum"] = s[5];
-			}
+			this->addLastChequeInfo();
 		}
 	}
 
@@ -272,10 +298,7 @@ SEND:
 	}
 	else {
 		this->answer["data"]["amount"] = sum;
-		this->answer["data"]["inn"] = getINN();
-		this->answer["data"]["cache_balance"] = this->getCacheBalance();
-		this->answer["data"]["shift_number"] = this->getShiftNumber();
-		this->answer["data"]["fn_number"] = this->getFnNumber();
+		this->addKKTINFO();
 	}
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["cashier"] = cashier;
@@ -344,10 +367,7 @@ SEND:
 			libCancelDocument();
 	}
 	else {
-		this->answer["data"]["inn"] = getINN();
-		this->answer["data"]["cache_balance"] = this->getCacheBalance();
-		this->answer["data"]["shift_number"] = this->getShiftNumber();
-		this->answer["data"]["fn_number"] = this->getFnNumber();
+		this->addKKTINFO();
 		this->answer["data"]["amount"] = amount;
 	}
 	this->answer["data"]["error"] = error;
@@ -385,10 +405,8 @@ RSJresource CashierHandlers::cancelPymentByLink(string ev, RSJresource data) {
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
-	this->answer["data"]["inn"] = getINN();
-	this->answer["data"]["cache_balance"] = this->getCacheBalance();
-	this->answer["data"]["shift_number"] = this->getShiftNumber();
-	this->answer["data"]["fn_number"] = this->getFnNumber();
+	this->addShiftNumber();
+	this->addKKTINFO();
 	return this->answer;
 };
 
@@ -406,54 +424,106 @@ RSJresource CashierHandlers::setZeroCashDrawer(string ev, RSJresource data) {
 	this->answer["data"]["error"] = error;
 	this->answer["data"]["error_code"] = err_code;
 	this->answer["data"]["text"] = text;
-	this->answer["data"]["inn"] = getINN();
-	this->answer["data"]["cache_balance"] = this->getCacheBalance();
-	this->answer["data"]["shift_number"] = this->getShiftNumber();
-	this->answer["data"]["fn_number"] = this->getFnNumber();
+	this->addShiftNumber();
+	this->addKKTINFO();
 	return this->answer;
 };
 
 RSJresource CashierHandlers::KKTInfo(string ev, RSJresource data) {
 	this->answer["event"] = "on" + ev;
 	this->answer["data"] = RSJresource("{}");
-	this->answer["data"]["inn"] = getINN();
-	this->answer["data"]["cache_balance"] = this->getCacheBalance();
-	this->answer["data"]["shift_number"] = this->getShiftNumber();
-	this->answer["data"]["fn_number"] = this->getFnNumber();
+	this->addShiftNumber();
+	this->addKKTINFO();
 	return this->answer;
 };
 
-string CashierHandlers::getKKTInfo(int num) {
-	MData inf = libGetKKTInfo(num);
-	if (inf.errCode == 0) {
-		string data(inf.data);
-		return data.substr(8, inf.dataLength - 12);
+void CashierHandlers::addKKTINFO() {
+	/*ИНН*/
+	this->answer["data"]["inn"] = requestDecorator(3, libGetKKTInfo);
+	/*Количество денег в денежном ящике*/
+	this->answer["data"]["cache_balance"] = requestDecorator(7, libGetKKTInfo);
+	/*Заводской номер фискальника*/
+	this->answer["data"]["fn_number"] = requestDecorator(1, libGetKKTInfo);
+};
+
+void CashierHandlers::addLastChequeInfo() {
+	string _data = requestDecorator(2, libGetReceiptData);
+	if (_data != "") {
+		auto s = split(_data, "\x1c");
+		this->answer["data"]["check_number"] = s[1]; //  Номер чека
+		this->answer["data"]["doc_number"] = s[3];  // Номер документа
+		this->answer["data"]["discount_sum"] = s[5]; // Сумма скидки по чеку
+		this->answer["data"]["discount_marckup_sum"] = s[6]; // Сумма скидки наценки по чеку
+		this->answer["data"]["fp"] = s[7]; // Фискальный признак
+		this->answer["data"]["fd"] = s[8]; // фискальный документ
 	}
-	else {
-		return NULL;
+};
+
+void CashierHandlers::addZReport() {
+	this->addShiftNumber();
+	this->addMarckupAndDiscountInfo();
+	this->addProgressiveTotalSales();
+	/* Вернуть данные по последнему X или Z отчету */
+	string _data = requestDecorator(12, libGetCountersAndRegisters);
+	if (_data != "") {
+		auto s = split(_data, "\x1c");
+		// Номер документа
+		this->answer["data"]["doc_number"] = s[1];
+		// Сумма в кассе
+		this->answer["data"]["cache_balance"] = s[2];
+		// Количество продаж
+		this->answer["data"]["count_sales"] = s[3];
+		// Сумма продаж
+		this->answer["data"]["sum_sales"] = s[4];
+		// Количество возваратов
+		this->answer["data"]["count_returns"] = s[5];
+		// Сумма возваратов
+		this->answer["data"]["sum_returns"] = s[6];
+		// Количество аннулированных
+		this->answer["data"]["sum_canceled"] = s[7];
+		// Сумма аннулированных
+		this->answer["data"]["sum_canceled"] = s[8];
+		// Количество внесений
+		this->answer["data"]["count_insert"] = s[9];
+		// Сумма внесений
+		this->answer["data"]["sum_insert"] = s[10];
+		// Количество изъятий
+		this->answer["data"]["count_remove"] = s[11];
+		// Сумма изъятий
+		this->answer["data"]["sum_remove"] = s[12];
 	}
 };
 
-string CashierHandlers::getFnNumber() {
-	return this->getKKTInfo(1);
+void CashierHandlers::addShiftNumber() {
+	/* Номер текущей или будующей(если смена закрыта) смены */
+	this->answer["data"]["shift_number"] = requestDecorator(1, libGetCountersAndRegisters);
 };
 
-inline string CashierHandlers::getCacheBalance() {
-	return this->getKKTInfo(7);
-};
-
-inline string CashierHandlers::getINN() {
-	return this->getKKTInfo(3);
-};
-
-inline string CashierHandlers::getShiftNumber() {
-	MData inf = libGetCountersAndRegisters(1);
-	if (inf.errCode == 0) {
-		string data(inf.data);
-		return data.substr(8, inf.dataLength - 12);
+void CashierHandlers::addMarckupAndDiscountInfo() {
+	/* Получить сумму скидок/наценок */
+	string _data = requestDecorator(9, libGetCountersAndRegisters);
+	if (_data != "") {
+		auto s = split(_data, "\x1c");
+		// Сумма скидок по продажам
+		this->answer["data"]["discount_sum_sales"] = s[0];
+		// Сумма наценок по продажам
+		this->answer["data"]["marckup_sum_sales"] = s[1];
+		// Сумма скидок по возвратам
+		this->answer["data"]["discount_sum_returns"] = s[2];
+		// Сумма наценок по возвратам
+		this->answer["data"]["marckup_sum_returns"] = s[3];
 	}
-	else {
-		return NULL;
+}
+
+void CashierHandlers::addProgressiveTotalSales() {
+	/* Нарастающий итог */
+	string _data = requestDecorator(12, libGetKKTInfo);
+	if (_data != "") {
+		auto s = split(_data, "\x1c");
+		// Нарастающий итог продажи
+		this->answer["data"]["progressive_total_sales"] = s[0];
+		// Нарастающий итог возврата
+		this->answer["data"]["progressive_total_returns"] = s[1];
 	}
 };
 
