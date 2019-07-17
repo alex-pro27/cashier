@@ -39,7 +39,7 @@
 		error: false,
 		error_code: 0,
 		cashier: "Сидр Петров",
-		cache_balance: 32440.5, 		// Количество денег в ящике
+		cash_balance: 32440.5, 			// Количество денег в ящике
 		fn_number: "0128010101", 		// Заводской номер фискального регистратора
 		inn: "2147473636", 			// Инн
 		shift_number: 45, 			// Номер смены
@@ -67,12 +67,12 @@
 		error: false,
 		error_code: 0,
 		cashier: "Сидр Петров",     		// Кассир,
-		cache_balance: 32440.5, 		// Количество денег в ящике
+		cash_balance: 32440.5, 			// Количество денег в ящике
 		fn_number: "0128010101", 		// Заводской номер фискального регистратора
 		inn: "2717473636", 			// Инн
 		shift_number: 45, 			// Номер смены
 		progressive_total_sales: 250.5,		// Нарастающий итог продажи
-		progressive_total_returns: 50.2, 	// Нарастающий итог продажи
+		progressive_total_returns: 50.2, 	// Нарастающий итог возвратов
 		discount_sum_sales:	0,		// Сумма скидок по продажам
 		marckup_sum_sales: 0,			// Сумма наценок по продажам
 		discount_sum_returns: 0,		// Сумма скидок по возвратам
@@ -104,28 +104,28 @@
     event: "onforce_close_shift",
     data: {
         error: false,
-		error_code: 0,
-		cashier: "Сидр Петров",     		// Кассир,
-		cache_balance: 32440.5, 		// Количество денег в ящике
-		fn_number: "0128010101", 		// Заводской номер фискального регистратора
-		inn: "2717473636", 			// Инн
-		shift_number: 45, 			// Номер смены
-		progressive_total_sales: 250.5,		// Нарастающий итог продажи
-		progressive_total_returns: 50.2, 	// Нарастающий итог продажи
-		discount_sum_sales:	0,		// Сумма скидок по продажам
-		marckup_sum_sales: 0,			// Сумма наценок по продажам
-		discount_sum_returns: 0,		// Сумма скидок по возвратам
-		marckup_sum_returns 0,			// Сумма наценок по возвратам
-		doc_number: 256, 			// Номер документа
-		count_sales: 4,				// Количество продаж
-		sum_sales: 520.5,			// Сумма продаж
-		count_insert: 1,			// Количество внесений
-		count_remove: 1,			// Количество изъятий
-		count_returns: 1, 			// Количество возвартов
-		sum_canceled: 0,			// Сумма аннулированных
-		sum_insert: 1000,			// Сумма внесений
-		sum_remove: 500,			// Сумма изъятий
-		sum_returns: 268.7,			// Сумма возвратов
+	error_code: 0,
+	cashier: "Сидр Петров",     		// Кассир,
+	cash_balance: 32440.5, 			// Количество денег в ящике
+	fn_number: "0128010101", 		// Заводской номер фискального регистратора
+	inn: "2717473636", 			// Инн
+	shift_number: 45, 			// Номер смены
+	progressive_total_sales: 250.5,		// Нарастающий итог продажи
+	progressive_total_returns: 50.2, 	// Нарастающий итог возвратов
+	discount_sum_sales:	0,		// Сумма скидок по продажам
+	marckup_sum_sales: 0,			// Сумма наценок по продажам
+	discount_sum_returns: 0,		// Сумма скидок по возвратам
+	marckup_sum_returns 0,			// Сумма наценок по возвратам
+	doc_number: 256, 			// Номер документа
+	count_sales: 4,				// Количество продаж
+	sum_sales: 520.5,			// Сумма продаж
+	count_insert: 1,			// Количество внесений
+	count_remove: 1,			// Количество изъятий
+	count_returns: 1, 			// Количество возвартов
+	sum_canceled: 0,			// Сумма аннулированных
+	sum_insert: 1000,			// Сумма внесений
+	sum_remove: 500,			// Сумма изъятий
+	sum_returns: 268.7,			// Сумма возвратов
     }
 }
 ```
@@ -234,7 +234,7 @@
 	data: {
 		error: false,
 		error_code: 0,
-		cache_balance: 32440.5, 			// Количество денег в ящике
+		cash_balance: 32440.5, 				// Количество денег в ящике
 		fn_number: "0128010101", 			// Заводской номер фискального регистратора
 		inn: "2717473636", 				// Инн
 		shift_number: 45, 				// Номер смены
